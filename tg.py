@@ -9,47 +9,52 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import db
 
-# Включаем логирование, чтобы не пропустить важные сообщения
-logging.basicConfig(level=logging.INFO)
+class TGBot:
+    def __init__(self):
+        self.token = None
+        self.bot = None
+        self.scheduler = AsyncIOScheduler(timezone='Europe/Moscow')
+        self.dp = Dispatcher()
+        self.db = db.DB()
+        self._setup_logging()
+        self._setup_handlers()
+        self._init_db()
 
-# Объект бота
-token = os.environ.get("TG_BOT_KEY")
-bot = Bot(token=token)
-scheduler = AsyncIOScheduler(timezone='Europe/Moscow')
+    def _setup_logging(self):
+        logging.basicConfig(level=logging.INFO)
 
-# Диспетчер
-dp = Dispatcher()
-db = db.DB()
-db.connect()
-db.prepare()
+    def _setup_handlers(self):
+        self.dp.message.register(self.cmd_start, Command("start"))
+        self.dp.message.register(self.subscribe, Command('subscribe'))
 
-# Хэндлер на команду /start
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.answer("Hello!")
+    def _init_db(self):
+        self.db.connect()
+        self.db.prepare()
+    
+    def init_bot(self):
+        self.bot = Bot(token=self.token)
 
-@dp.message(Command('subscribe'))
-async def subscribe(message: types.Message):
-    rss_list = message.text.split(" ")[1:]
-    for url in rss_list:
-        db.add_subscription(message.from_user.id, url)
-    await message.reply("Вы подписаны на рассылку!")
+    async def cmd_start(self, message: types.Message):
+        await message.answer("Hello!")
 
-# Функция, которая будет выполняться по расписанию
-async def send_scheduled_message():
-    users = db.get_users_subscriptions()
-    for user_id, url in users:
-        try:
-            cprint(user_id, 'green')
-            await bot.send_message(user_id, f"Это регулярная рассылка! {url}")
-        except Exception as e:
-            print(f"Ошибка отправки сообщения пользователю {user_id}: {e}")
+    async def subscribe(self, message: types.Message):
+        rss_list = message.text.split(" ")[1:]
+        for url in rss_list:
+            self.db.add_subscription(message.from_user.id, url)
+        await message.reply("Вы подписаны на рассылку!")
 
-# Запуск процесса поллинга новых апдейтов
-async def main():
-    scheduler.add_job(send_scheduled_message, 'interval', seconds=3)
-    scheduler.start()
-    await dp.start_polling(bot)
+    async def send_scheduled_message(self):
+        users = self.db.get_users_subscriptions()
+        for user_id, url in users:
+            try:
+                cprint(user_id, 'green')
+                await self.bot.send_message(user_id, f"Это регулярная рассылка! {url}")
+            except Exception as e:
+                print(f"Ошибка отправки сообщения пользователю {user_id}: {e}")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    async def run(self):
+        self.scheduler.add_job(self.send_scheduled_message, 'interval', seconds=5)
+        self.scheduler.start()
+        await self.dp.start_polling(self.bot)
+
+

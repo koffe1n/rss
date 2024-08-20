@@ -14,7 +14,8 @@ class DB:
             CREATE TABLE IF NOT EXISTS subscriptions (
                 id INTEGER PRIMARY KEY,
                 user_id INTEGER NOT NULL,
-                url TEXT NOT NULL
+                url TEXT NOT NULL,
+                unique(user_id, url)
             )
         ''')
         self.cursor.execute('''
