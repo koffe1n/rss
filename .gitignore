@@ -2,3 +2,4 @@ __*
 venv/
 .env
 *.db
+*.json
