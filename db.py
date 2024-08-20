@@ -33,5 +33,5 @@ class DB:
         self.conn.commit()
 
     def get_users_subscriptions(self):
-        self.cursor.execute('SELECT url FROM subscriptions')
+        self.cursor.execute('SELECT user_id, url FROM subscriptions')
         return self.cursor.fetchall()

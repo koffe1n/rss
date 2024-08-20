@@ -1,71 +1,55 @@
-import telebot
-from termcolor import cprint
-import time
-import rss
-
 import asyncio
-import schedule
+import logging
+import os
+from termcolor import cprint
+
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters.command import Command
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import db
 
-class TelegramBot:
-    def __init__(self, key):
-        self.key = key
-        self.bot=telebot.TeleBot(key)
-        self.scheduler = schedule.Scheduler
-        self.db = db.DB
-    
-        @self.bot.message_handler(commands=['start'])
-        def send_welcome(message):
-            self.bot.reply_to(message,"Check check")
+# Включаем логирование, чтобы не пропустить важные сообщения
+logging.basicConfig(level=logging.INFO)
 
-        @self.bot.message_handler(commands=['add_feed'])
-        def add_feed(message):
-            rss_list = message.text.split(" ")[1:]
-            for r in rss_list:
-                self.db.add_subscription(self.db, message.from_user.id, r)
-                # self.scheduler.add_job(researchRss, "interval", seconds=2, args=(self.bot, message.from_user.id, r))
-            if len(rss_list) > 1:
-                reply = "Лента добавлена"
-            else:
-                reply = "Ленты добавлены"
-            self.bot.reply_to(message,reply)
+# Объект бота
+token = os.environ.get("TG_BOT_KEY")
+bot = Bot(token=token)
+scheduler = AsyncIOScheduler(timezone='Europe/Moscow')
 
-        @self.bot.message_handler(commands=['remove_feed'])
-        def remove_feed(message):
-            rssList = message.text.split(" ")[1:]
-            if len(rssList) > 1:
-                reply = "Лента удалена из подписок"
-            else:
-                reply = "Ленты удалены из подписок"
-            self.bot.reply_to(message,reply)
+# Диспетчер
+dp = Dispatcher()
+db = db.DB()
+db.connect()
+db.prepare()
 
-    def start(self):
-        cprint("TG bot started", 'blue')
+# Хэндлер на команду /start
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.answer("Hello!")
+
+@dp.message(Command('subscribe'))
+async def subscribe(message: types.Message):
+    rss_list = message.text.split(" ")[1:]
+    for url in rss_list:
+        db.add_subscription(message.from_user.id, url)
+    await message.reply("Вы подписаны на рассылку!")
+
+# Функция, которая будет выполняться по расписанию
+async def send_scheduled_message():
+    users = db.get_users_subscriptions()
+    for user_id, url in users:
         try:
-            self.db.connect(self.db)
-            self.db.prepare(self.db)
-        except Exception as e:
-            cprint('ошибка при старте базы данных', 'red')
-            print(e)
-        
-        schedule.every(3).seconds.do(lambda: asyncio.create_task(sendRss(self.bot)))
-        asyncio.create_task(asyncio.to_thread(run_scheduler))
-        self.bot.infinity_polling()
-
-    async def sendMessage(self, user_id, message):
-        self.bot.send_message(user_id, message)
-
-def run_scheduler():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-async def sendRss(bot):
-    a = db.DB.get_users_subscriptions(db)
-    for (user_id, url) in a:
-        reply = rss.getRssContent(url)
-        try:
-            await bot.send_message(user_id, reply)
+            cprint(user_id, 'green')
+            await bot.send_message(user_id, f"Это регулярная рассылка! {url}")
         except Exception as e:
             print(f"Ошибка отправки сообщения пользователю {user_id}: {e}")
+
+# Запуск процесса поллинга новых апдейтов
+async def main():
+    scheduler.add_job(send_scheduled_message, 'interval', seconds=3)
+    scheduler.start()
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
