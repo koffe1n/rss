@@ -7,6 +7,10 @@ from termcolor import cprint
 if hasattr(ssl, '_create_unverified_context'):
     ssl._create_default_https_context = ssl._create_unverified_context
 
+def getRssTitle(url):
+    feed = feedparser.parse(url)
+    return feed.feed.title 
+
 def getRssContent(url):
     feed = feedparser.parse(url)
     return feed

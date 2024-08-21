@@ -37,8 +37,15 @@ class DB:
         self.conn.commit()
 
     def add_subscription(self, user_id, url):
-        self.cursor.execute("INSERT INTO rss(url) VALUES(?)", (url,))
+        self.cursor.execute("INSERT INTO rss(url) VALUES(?) ON CONFLICT DO NOTHING", (url,))
         self.cursor.execute("INSERT INTO subscriptions(user_id, rss_id) VALUES(?,?)", (user_id, self.cursor.lastrowid))
+        self.conn.commit()
+
+    def delete_subscription(self, user_id, url):
+        self.cursor.execute('''DELETE FROM subscriptions WHERE rss_id=(
+                            SELECT id FROM rss WHERE url=?
+                            ) AND user_id=?''', (url,user_id))
+        # TODO remove unsubsribed links
         self.conn.commit()
 
     def get_all_users_subscriptions(self):
