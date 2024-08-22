@@ -11,8 +11,3 @@ def convert_time(time) -> datetime.time:
         except Exception as e:
             continue
     raise ValueError(f"Неизвестный формат даты: {time}")
-
-now = datetime.now(timezone.utc)
-pub = convert_time('Wed, 21 Aug 2024 18:00:13 GMT')
-
-print(pub>now)

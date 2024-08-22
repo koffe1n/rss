@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from termcolor import cprint
 
 from aiogram import Bot, Dispatcher, types
@@ -24,7 +24,8 @@ class TGBot:
         self._setup_logging()
         self._setup_handlers()
         self._init_db()
-        self.last_refresh = datetime.now(timezone.utc)
+        self.last_refresh = datetime.now(timezone.utc) - timedelta(hours=1)
+        self.source = "telegram"
 
     def _setup_logging(self):
         logging.basicConfig(level=logging.INFO)
@@ -46,7 +47,9 @@ class TGBot:
         await message.reply("I'm still here") 
 
     async def cmd_start(self, message: types.Message):
-        self.db.add_user(message.from_user.id, message.from_user.username)
+        self.db.add_user(message.from_user.id,
+                        message.from_user.username,
+                        self.source)
         await message.answer("Введите команду /subscribe <url> чтобы подписаться на рассылку")  
 
     async def subscribe(self, message: types.Message):
@@ -68,7 +71,7 @@ class TGBot:
             await message.reply(f"Вы отписались от рассылки {title}")
 
     async def send_scheduled_message(self):
-        users = self.db.get_all_users_subscriptions()
+        users = self.db.get_all_users_subscriptions(self.source)
         for user_id, url in users:
             feed = rss.getRssContent(url)
             for e in feed.entries:
@@ -78,6 +81,7 @@ class TGBot:
                             Bold(e.title),
                             e.summary,
                             e.published,
+                            e.link,
                             sep="\n\n"
                         )
                         await self.bot.send_message(user_id, **message.as_kwargs())
@@ -86,7 +90,7 @@ class TGBot:
             self.last_refresh = datetime.now(timezone.utc)
 
     async def run(self):
-        self.scheduler.add_job(self.send_scheduled_message, 'interval', minutes=10)
+        self.scheduler.add_job(self.send_scheduled_message, 'interval', seconds=5)
         self.scheduler.start()
         await self.dp.start_polling(self.bot)
 
